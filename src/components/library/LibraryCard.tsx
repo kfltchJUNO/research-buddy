@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Star, Clock, FileText, ChevronRight } from "lucide-react";
-import CountdownTimer from "./CountdownTimer"; // 지난번 구현한 타이머 사용
+import CountdownTimer from "./CountdownTimer";
 import Link from "next/link";
 
 export default function LibraryCard({ item, onFavoriteToggle }: any) {
@@ -10,46 +10,47 @@ export default function LibraryCard({ item, onFavoriteToggle }: any) {
     scan: "bg-blue-50 text-blue-600",
     understand: "bg-purple-50 text-purple-600",
     think: "bg-orange-50 text-orange-600",
+    multi: "bg-violet-50 text-violet-600",
   };
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="group bg-white border border-gray-100 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:border-black hover:shadow-xl transition-all cursor-pointer relative"
+      className="group bg-white border border-gray-100 p-6 rounded-[2rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:border-violet-600 hover:shadow-xl transition-all relative"
     >
-      <div className="flex-1 space-y-3">
+      <Link href={`/analysis/${item.id}`} className="flex-1 space-y-3 w-full">
         <div className="flex items-center gap-3">
-          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest ${modeColors[item.mode]}`}>
+          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${modeColors[item.mode]}`}>
             {item.mode}
           </span>
-          <h3 className="font-black text-xl text-gray-900 group-hover:text-blue-600 transition-colors">
+          <h3 className="font-black text-lg text-gray-900 group-hover:text-violet-600 transition-colors line-clamp-1">
             {item.title}
           </h3>
         </div>
         
         <p className="text-gray-500 line-clamp-1 text-sm font-medium">
-          {item.oneLineSummary || "요약 내용을 불러올 수 없습니다."}
+          {item.oneLineSummary || "분석 내용을 불러오는 중입니다..."}
         </p>
 
         <div className="flex flex-wrap gap-2">
           {item.keywords?.map((kw: string) => (
-            <span key={kw} className="text-[11px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
+            <span key={kw} className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100">
               #{kw}
             </span>
           ))}
         </div>
-      </div>
+      </Link>
 
-      <div className="flex items-center gap-6 w-full md:w-auto border-t md:border-t-0 pt-4 md:pt-0">
-        <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center justify-between w-full md:w-auto gap-6 border-t md:border-t-0 pt-4 md:pt-0">
+        <div className="flex flex-col items-end gap-1.5">
           <CountdownTimer 
             targetDate={item.fileDeletedAt?.toDate()} 
             isDeleted={item.isSourceDeleted}
           />
-          <span className="text-[10px] text-gray-300 font-medium flex items-center gap-1">
+          <span className="text-[10px] text-gray-300 font-bold flex items-center gap-1">
             <Clock size={10} /> {item.createdAt?.toDate().toLocaleDateString()} 분석
           </span>
         </div>
@@ -57,7 +58,8 @@ export default function LibraryCard({ item, onFavoriteToggle }: any) {
         <div className="flex items-center gap-2">
           <button
             onClick={(e) => {
-              e.preventDefault();
+              e.preventDefault(); // 링크 이동 방지
+              e.stopPropagation();
               onFavoriteToggle();
             }}
             className={`p-3 rounded-2xl transition-all ${
@@ -67,7 +69,7 @@ export default function LibraryCard({ item, onFavoriteToggle }: any) {
             <Star size={20} fill={item.isFavorite ? "currentColor" : "none"} />
           </button>
           
-          <Link href={`/analysis/${item.id}`} className="p-3 bg-black text-white rounded-2xl hover:scale-105 transition-transform">
+          <Link href={`/analysis/${item.id}`} className="p-3 bg-gray-900 text-white rounded-2xl hover:bg-black transition-colors">
             <ChevronRight size={20} />
           </Link>
         </div>

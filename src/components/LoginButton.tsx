@@ -1,33 +1,38 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getInAppBrowserType } from "@/lib/detector";
+// 오류 수정: detector 대신 실제 파일인 detect-inapp을 참조하고 export된 함수명을 사용합니다.
+import { isInAppBrowser } from "@/lib/detect-inapp"; 
 import { signInWithGoogle } from "@/lib/auth-service";
 
 export default function LoginButton() {
-  const [inAppType, setInAppType] = useState<string | null>(null);
+  const [isInApp, setIsInApp] = useState(false);
 
   useEffect(() => {
-    setInAppType(getInAppBrowserType());
+    // 실제 라이브러리에 정의된 isInAppBrowser()를 호출합니다.
+    setIsInApp(isInAppBrowser());
   }, []);
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert("주소가 복사되었습니다! 크롬이나 사파리 앱을 열어 붙여넣어 주세요.");
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      alert("주소가 복사되었습니다! 크롬이나 사파리 앱을 열어 붙여넣어 주세요.");
+    }
   };
 
-  if (inAppType) {
+  if (isInApp) {
     return (
-      <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-xl text-center">
-        <p className="text-sm text-yellow-800 mb-4">
-          {inAppType} 브라우저에서는 구글 로그인이 제한됩니다.<br/>
-          안전한 이용을 위해 <strong>외부 브라우저</strong>를 사용해주세요.
+      <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-3xl text-center shadow-sm">
+        <div className="text-3xl mb-3">⚠️</div>
+        <p className="text-sm text-yellow-800 font-bold mb-4 leading-relaxed">
+          인앱 브라우저(카카오/인스타 등)에서는<br/>
+          구글 로그인이 제한될 수 있습니다.
         </p>
         <button 
           onClick={handleCopyUrl}
-          className="w-full py-3 bg-yellow-500 text-white rounded-lg font-bold"
+          className="w-full py-4 bg-yellow-400 text-yellow-900 rounded-2xl font-black active:scale-95 transition-all shadow-md"
         >
-          주소 복사하고 크롬/사파리로 가기
+          주소 복사하고 외부 브라우저로 가기
         </button>
       </div>
     );
@@ -36,10 +41,10 @@ export default function LoginButton() {
   return (
     <button 
       onClick={signInWithGoogle}
-      className="flex items-center justify-center gap-3 w-full py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+      className="flex items-center justify-center gap-3 w-full py-4 bg-white border-2 border-gray-100 rounded-2xl hover:border-violet-600 hover:bg-violet-50 transition-all group active:scale-95 shadow-sm"
     >
-      <img src="/google-logo.png" alt="Google" className="w-5 h-5" />
-      <span className="font-medium">구글로 시작하기</span>
+      <img src="/google-icon.svg" alt="Google" className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+      <span className="font-bold text-gray-700">구글 계정으로 시작하기</span>
     </button>
   );
 }

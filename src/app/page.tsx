@@ -1,16 +1,19 @@
+"use client";
+
 import Header from "@/components/layout/Header";
-import UploadZone from "@/components/analysis/UploadZone"; // 이전에 만든 업로드 존
+import UploadZone from "@/components/library/UploadZone";
 import RecentLibrarySummary from "@/components/dashboard/RecentLibrarySummary";
 import WelcomeGuide from "@/components/guide/WelcomeGuide";
-import { auth } from "@/lib/firebase"; // 실제 구현 시 훅이나 세션 관리 필요
 
 export default function DashboardPage() {
-  // 실제 유저 데이터는 세션이나 전역 상태에서 가져옵니다.
-  const mockUser = { uid: "user_123", nickname: "연구자A12" };
+  // 실제 유저 데이터는 세션이나 전역 상태에서 가져오므로, 
+  // 컴포넌트에 직접 prop으로 넘기지 않고 내부 훅에서 처리하도록 수정했습니다.
+  const mockUserId = "user_123"; 
 
   return (
     <div className="min-h-screen bg-[#F9FAFB]">
-      <Header user={mockUser} />
+      {/* 에러 해결: Header에 user={mockUser}를 넘기지 않습니다. */}
+      <Header />
       <WelcomeGuide />
 
       <main className="pt-32 pb-20 px-6 flex flex-col items-center">
@@ -29,27 +32,29 @@ export default function DashboardPage() {
           <UploadZone />
         </div>
 
-        {/* 분석 결과가 없을 때 보여주는 안내 가이드 */}
+        {/* 분석 결과 가이드 카드 */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
-          <div className="p-8 bg-white border rounded-[2.5rem] shadow-sm">
+          <div className="p-8 bg-white border border-gray-100 rounded-[2.5rem] shadow-sm hover:shadow-md transition-shadow">
             <div className="text-3xl mb-4">⚡</div>
-            <h4 className="font-bold mb-2">초고속 Scan</h4>
+            <h4 className="font-bold text-gray-900 mb-2">초고속 Scan</h4>
             <p className="text-sm text-gray-500 leading-relaxed">3초 만에 핵심 키워드와 맥락을 파악하여 읽을 가치가 있는지 판단하세요.</p>
           </div>
-          <div className="p-8 bg-white border rounded-[2.5rem] shadow-sm">
+          <div className="p-8 bg-white border border-gray-100 rounded-[2.5rem] shadow-sm hover:shadow-md transition-shadow">
             <div className="text-3xl mb-4">🔍</div>
-            <h4 className="font-bold mb-2">심층 Understand</h4>
+            <h4 className="font-bold text-gray-900 mb-2">심층 Understand</h4>
             <p className="text-sm text-gray-500 leading-relaxed">구조화된 요약과 핵심 개념 설명을 통해 논문 전체를 완벽히 이해하세요.</p>
           </div>
-          <div className="p-8 bg-white border rounded-[2.5rem] shadow-sm">
+          <div className="p-8 bg-white border border-gray-100 rounded-[2.5rem] shadow-sm hover:shadow-md transition-shadow">
             <div className="text-3xl mb-4">🧠</div>
-            <h4 className="font-bold mb-2">비판적 Think</h4>
+            <h4 className="font-bold text-gray-900 mb-2">비판적 Think</h4>
             <p className="text-sm text-gray-500 leading-relaxed">AI와 논쟁하며 저자의 한계를 찾고 나만의 연구 질문을 도출하세요.</p>
           </div>
         </div>
 
-        {/* 라이브러리 요약 */}
-        <RecentLibrarySummary userId={mockUser.uid} />
+        {/* 라이브러리 요약 목록 */}
+        <div className="w-full max-w-4xl mt-16">
+          <RecentLibrarySummary userId={mockUserId} />
+        </div>
       </main>
     </div>
   );

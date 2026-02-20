@@ -1,43 +1,39 @@
-"use client";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
-import { useInk } from "@/hooks/useInk";
-import RollingNumber from "@/components/common/RollingNumber";
-import { User, LogOut, ChevronDown } from "lucide-react";
-import { auth } from "@/lib/firebase";
-import { signOut } from "firebase/auth";
+/**
+ * 특정 HTML 요소를 PDF로 변환하여 다운로드합니다.
+ * @param elementId PDF로 만들 영역의 ID (예: 'report-content')
+ * @param fileName 저장될 파일 이름
+ */
+export const exportToPDF = async (elementId: string, fileName: string) => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error("PDF로 변환할 요소를 찾을 수 없습니다.");
+    return;
+  }
 
-export default function Header({ user }: { user: any }) {
-  return (
-    <header className="fixed top-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-md border-b z-50 px-8 flex justify-between items-center">
-      <div className="flex items-center gap-2">
-        <span className="text-2xl">🖋️</span>
-        <h1 className="text-xl font-black tracking-tighter">ResearchBuddy</h1>
-      </div>
+  try {
+    // 1. HTML 영역을 캔버스로 변환 (고해상도를 위해 scale 조절)
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true, // 외부 이미지 로드 허용
+      logging: false,
+    });
 
-      <div className="flex items-center gap-6">
-        {/* 실시간 잉크 상태바 */}
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 px-5 py-2 rounded-2xl">
-          <span className="text-xs font-black text-blue-400 uppercase tracking-widest">My Ink</span>
-          <div className="flex items-center gap-1.5 text-blue-600 font-black text-lg">
-            <span>🖋️</span>
-            <RollingNumber value={useInk()} />
-          </div>
-        </div>
+    const imgData = canvas.toDataURL("image/png");
 
-        {/* 사용자 프로필 드롭다운 */}
-        <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
-          <div className="text-right hidden sm:block">
-            <div className="text-sm font-bold text-gray-900">{user?.nickname}</div>
-            <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">Researcher ID: {user?.uid.slice(0, 5)}</div>
-          </div>
-          <button 
-            onClick={() => signOut(auth)}
-            className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
+    // 2. PDF 생성 (A4 사이즈 기준)
+    const pdf = new jsPDF("p", "mm", "a4");
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+    // 3. 이미지를 PDF에 삽입 및 저장
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`${fileName}.pdf`);
+  } catch (error) {
+    console.error("PDF 생성 중 오류 발생:", error);
+    alert("PDF를 생성하는 데 실패했습니다.");
+  }
+};
