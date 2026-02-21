@@ -1,79 +1,98 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Star, Clock, FileText, ChevronRight } from "lucide-react";
-import CountdownTimer from "./CountdownTimer";
+import React from "react";
 import Link from "next/link";
+import { Clock, Star, ArrowRight, Zap, Target, ShieldCheck } from "lucide-react";
+import CountdownTimer from "./CountdownTimer";
 
-export default function LibraryCard({ item, onFavoriteToggle }: any) {
-  const modeColors: any = {
-    scan: "bg-blue-50 text-blue-600",
-    understand: "bg-purple-50 text-purple-600",
-    think: "bg-orange-50 text-orange-600",
-    multi: "bg-violet-50 text-violet-600",
+interface LibraryCardProps {
+  item: any; // page.tsx에서 전달한 데이터
+}
+
+export default function LibraryCard({ item }: LibraryCardProps) {
+  // 모드별 색상 정의
+  const modeConfig: any = {
+    scan: { label: "Scan", color: "bg-amber-100 text-amber-700", icon: <Zap size={12} /> },
+    understand: { label: "Understand", color: "bg-emerald-100 text-emerald-700", icon: <Target size={12} /> },
+    think: { label: "Think", color: "bg-violet-100 text-violet-700", icon: <Star size={12} fill="currentColor" /> },
+    multi: { label: "Multi", color: "bg-indigo-600 text-white", icon: <Zap size={12} /> }
   };
 
+  const config = modeConfig[item.mode] || modeConfig.scan;
+
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="group bg-white border border-gray-100 p-6 rounded-[2rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:border-violet-600 hover:shadow-xl transition-all relative"
-    >
-      <Link href={`/analysis/${item.id}`} className="flex-1 space-y-3 w-full">
-        <div className="flex items-center gap-3">
-          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${modeColors[item.mode]}`}>
-            {item.mode}
-          </span>
-          <h3 className="font-black text-lg text-gray-900 group-hover:text-violet-600 transition-colors line-clamp-1">
+    <div className="bg-white rounded-[2.5rem] border border-gray-50 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group overflow-hidden flex flex-col h-full">
+      {/* 카드 상단: 모드 배지 및 즐겨찾기 */}
+      <div className="p-8 pb-4 flex justify-between items-start">
+        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${config.color}`}>
+          {config.icon} {config.label}
+        </div>
+        <button className={`p-2 rounded-xl transition-all ${item.isFavorite ? 'text-amber-400 bg-amber-50' : 'text-gray-200 hover:text-gray-400'}`}>
+          <Star size={20} fill={item.isFavorite ? "currentColor" : "none"} />
+        </button>
+      </div>
+
+      {/* 카드 중단: 제목 및 분석 요약 */}
+      <div className="px-8 flex-1">
+        <Link href={`/analysis/${item.id}`} className="block mb-4">
+          <h3 className="text-xl font-black text-gray-900 leading-tight line-clamp-2 group-hover:text-violet-600 transition-colors">
             {item.title}
           </h3>
-        </div>
-        
-        <p className="text-gray-500 line-clamp-1 text-sm font-medium">
-          {item.oneLineSummary || "분석 내용을 불러오는 중입니다..."}
+        </Link>
+        <p className="text-gray-400 text-sm font-medium line-clamp-2 mb-6">
+          {item.oneLineSummary || "분석 요약을 불러오는 중입니다..."}
         </p>
 
-        <div className="flex flex-wrap gap-2">
-          {item.keywords?.map((kw: string) => (
-            <span key={kw} className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100">
-              #{kw}
+        {/* 📊 신뢰도 지표 시각화 (Reliability Index) */}
+        {item.reliability_index && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-2xl space-y-3">
+            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-tighter">
+              <span className="text-violet-600">인용 비율 {item.reliability_index.citation_ratio}%</span>
+              <span className="text-gray-400">해석 비율 {item.reliability_index.interpretation_ratio}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden flex">
+              <div 
+                className="h-full bg-violet-600 transition-all duration-1000" 
+                style={{ width: `${item.reliability_index.citation_ratio}%` }} 
+              />
+              <div 
+                className="h-full bg-indigo-200 transition-all duration-1000" 
+                style={{ width: `${item.reliability_index.interpretation_ratio}%` }} 
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 카드 하단: 파기 카운트다운 및 링크 */}
+      <div className="p-8 pt-0 mt-auto">
+        <div className="flex items-center justify-between pt-6 border-t border-gray-50">
+          <div className="flex flex-col gap-1">
+            {/* ✅ 수정: 데이터 존재 여부를 안전하게 확인하여 .toDate() 에러 방지 */}
+            {item.fileDeletedAt ? (
+              <CountdownTimer 
+                targetDate={item.fileDeletedAt?.toDate ? item.fileDeletedAt.toDate() : new Date(item.fileDeletedAt)} 
+                isDeleted={item.isSourceDeleted}
+              />
+            ) : (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-300">
+                <ShieldCheck size={12} /> 보안 기록 완료
+              </div>
+            )}
+            <span className="text-[10px] text-gray-300 font-bold flex items-center gap-1">
+              <Clock size={10} /> 
+              {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : '데이터 로딩 중...'}
             </span>
-          ))}
-        </div>
-      </Link>
+          </div>
 
-      <div className="flex items-center justify-between w-full md:w-auto gap-6 border-t md:border-t-0 pt-4 md:pt-0">
-        <div className="flex flex-col items-end gap-1.5">
-          <CountdownTimer 
-            targetDate={item.fileDeletedAt?.toDate()} 
-            isDeleted={item.isSourceDeleted}
-          />
-          <span className="text-[10px] text-gray-300 font-bold flex items-center gap-1">
-            <Clock size={10} /> {item.createdAt?.toDate().toLocaleDateString()} 분석
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.preventDefault(); // 링크 이동 방지
-              e.stopPropagation();
-              onFavoriteToggle();
-            }}
-            className={`p-3 rounded-2xl transition-all ${
-              item.isFavorite ? 'bg-yellow-100 text-yellow-500' : 'bg-gray-50 text-gray-300 hover:text-yellow-500'
-            }`}
+          <Link 
+            href={`/analysis/${item.id}`} 
+            className="w-10 h-10 bg-gray-900 text-white rounded-xl flex items-center justify-center hover:bg-violet-600 transition-all shadow-lg"
           >
-            <Star size={20} fill={item.isFavorite ? "currentColor" : "none"} />
-          </button>
-          
-          <Link href={`/analysis/${item.id}`} className="p-3 bg-gray-900 text-white rounded-2xl hover:bg-black transition-colors">
-            <ChevronRight size={20} />
+            <ArrowRight size={18} />
           </Link>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

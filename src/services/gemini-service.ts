@@ -1,112 +1,133 @@
+// src/services/gemini-service.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+if (!apiKey) console.error("🔥 치명적 오류: Gemini API Key가 없습니다.");
 
-/**
- * [1단계: Scan] Gemini 1.5 Flash를 사용하여 3초 만에 핵심 파악
- */
-export async function quickScan(text: string) {
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: { responseMimeType: "application/json" }
-  });
+const genAI = new GoogleGenerativeAI(apiKey);
 
-  const prompt = `
-    당신은 숙련된 연구 조교입니다. 제공된 연구 자료를 분석하여 핵심을 요약하세요.
-    결과는 반드시 한국어로 작성하고, 아래 JSON 형식만 반환하세요.
-    {
-      "keywords": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
-      "oneLineSummary": "연구 내용을 관통하는 명확한 1줄 요약"
-    }
-    분석할 텍스트: ${text}
-  `;
-
-  const result = await model.generateContent(prompt);
-  return JSON.parse(result.response.text());
+function fileToGenerativePart(base64Data: string, mimeType: string) {
+  return {
+    inlineData: {
+      data: base64Data,
+      mimeType: mimeType || "application/pdf",
+    },
+  };
 }
 
-/**
- * [2/3단계: Understand & Think] 단일 자료 심층 분석
- */
-export async function analyzeWithGeminiPro(
-  text: string, 
-  mode: 'understand' | 'think',
-  perspective?: 'critical' | 'easy' | 'counter' | 'alternative'
-) {
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-pro",
-    generationConfig: { responseMimeType: "application/json" }
-  });
-  
-  const modeInstructions = {
-    understand: "자료를 [서론, 방법, 결과, 결론] 구조로 상세히 요약하고 핵심 개념을 설명해줘.",
-    think: "비판적 연구 분석가로서 숨겨진 전제를 의심하고 한계와 반대 사례를 도출해줘."
+// 🎯 확실하게 작동하는 2.5 라인업으로만 구성
+const OPTIMAL_MODELS = [
+  "gemini-2.5-pro",
+  "gemini-2.5-flash"
+];
+
+// 🚨 AI의 형태를 완벽하게 통제하는 절대 규칙
+const STRICT_RULES = `
+[절대 규칙: 반드시 지킬 것]
+1. 마크다운 기호(*, **, # 등)를 절대 사용하지 마세요. 볼드체나 헤딩을 쓰지 마세요.
+2. 단락을 구분할 때는 반드시 줄바꿈(\n) 두 번을 사용하세요.
+3. 큰 섹션을 나눌 때는 반드시 '[구분선: -------------]'을 정확히 사용하세요.
+4. 항목을 나열할 때는 1., 2., 3. 번호를 사용하세요.
+5. Shon (2023), 김철수 등 논문의 저자명, 연구자 이름, 기관명, 고유명사는 절대 다른 언어로 번역하거나 임의로 변경하지 말고 원문 그대로 표기하세요.
+`;
+
+export async function analyzePDFDirect(base64Data: string, mode: 'scan' | 'understand' | 'think') {
+  const prompts = {
+    scan: `${STRICT_RULES}
+이 PDF 논문을 스캔하여 다음 구조로만 작성해줘:
+
+핵심 요약
+(전체 내용을 3줄로 평문 작성)
+
+[구분선: -------------]
+
+주요 키워드
+1. (키워드)
+2. (키워드)
+
+[구분선: -------------]
+
+연구 목적
+(연구 진행 배경을 1~2문장으로 평문 작성)`,
+
+    understand: `${STRICT_RULES}
+이 논문을 심층 분석하여 다음 구조로만 작성해줘:
+
+연구 방법론
+(어떤 연구 방법을 사용했는지 상세히 서술)
+
+[구분선: -------------]
+
+주요 가설 및 검증 결과
+(가설과 도출 결과를 서술)
+
+[구분선: -------------]
+
+시각 자료(표/그래프) 핵심 해석
+(중요한 데이터가 의미하는 바를 서술)
+
+[구분선: -------------]
+
+한국어 교육적 함의
+(연구 결과의 교육적 시사점 서술)`,
+
+    think: `${STRICT_RULES}
+이 논문을 비판적으로 분석하여 다음 구조로만 작성해줘:
+
+논리적 흐름 및 타당성 평가
+(설계부터 결론까지 흐름의 타당성 평가)
+
+[구분선: -------------]
+
+연구의 한계점 및 논리적 허점
+(데이터나 방법론의 취약점 지적)
+
+[구분선: -------------]
+
+향후 연구 방향 제안
+1. (첫 번째 제안)
+2. (두 번째 제안)`
   };
 
-  let perspectiveInstruction = "";
-  if (perspective === 'critical') perspectiveInstruction = "\n[관점] 논리적 결함을 집중 파헤쳐줘.";
-  else if (perspective === 'easy') perspectiveInstruction = "\n[관점] 중학생도 이해하게 쉬운 비유로 설명해줘.";
+  let lastError: any;
 
-  const prompt = `
-    ${modeInstructions[mode]} ${perspectiveInstruction}
-    반드시 한국어로 응답하고 아래 JSON 형식을 지켜줘. 마크다운 사용 금지.
-    {
-      "summary": "분석 내용...",
-      "trustLevel": "높음/중간/낮음",
-      "citationRatio": 70, 
-      "interpretationRatio": 30,
-      "citations": [{ "page": 1, "text": "..." }],
-      "visualData": {
-        "type": "bar",
-        "labels": ["항목1", "항목2"],
-        "values": [10, 20],
-        "title": "데이터 시각화 제목"
-      }
+  for (const modelName of OPTIMAL_MODELS) {
+    try {
+      console.log(`🚀 [${mode.toUpperCase()}] 분석 시도: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      
+      const result = await model.generateContent([
+        fileToGenerativePart(base64Data, "application/pdf"),
+        { text: prompts[mode] }
+      ]);
+
+      const response = await result.response;
+      return { summary: response.text() };
+
+    } catch (error: any) {
+      console.warn(`⚠️ [실패] ${modelName} 오류. (사유: ${error.message})`);
+      lastError = error;
     }
-    텍스트: ${text}
-  `;
+  }
 
-  const result = await model.generateContent(prompt);
-  return JSON.parse(result.response.text());
+  throw new Error(`AI 모델 응답 실패. (최종 에러: ${lastError?.message})`);
 }
 
-/**
- * [신규: Multi-Think] 다수 자료 비교 분석
- * 2단계 Map-Reduce 방식을 위해 각 파일의 핵심 요약본들을 입력으로 받습니다.
- */
-export async function analyzeMulti(contents: {title: string, text: string}[]) {
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-pro",
-    generationConfig: { responseMimeType: "application/json" }
-  });
+export async function analyzeMultiDirect(files: {base64: string, mimeType: string}[]) {
+  let lastError: any;
+  for (const modelName of OPTIMAL_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const promptParts: any[] = files.map(f => fileToGenerativePart(f.base64, f.mimeType));
+      promptParts.push({ 
+        text: `${STRICT_RULES}\n제시된 여러 PDF 논문들의 공통점과 차이점을 분석해 구조화된 리포트를 평문으로 작성해.` 
+      });
 
-  const combinedText = contents.map(c => `[논문: ${c.title}]\n${c.text}`).join("\n\n---\n\n");
-
-  const prompt = `
-    당신은 여러 연구의 흐름을 꿰뚫어 보는 통합 분석가입니다. 
-    제시된 여러 논문들의 공통점, 차이점, 그리고 주장 간의 충돌 지점을 분석하세요.
-    
-    반드시 한국어로 아래 JSON 형식을 반환하세요.
-    {
-      "mainConclusion": "모든 논문을 관통하는 최종 한 줄 결론",
-      "comparisonTable": [
-        { "criteria": "연구 방법", "findings": "A는 양적, B는 질적 연구 수행" }
-      ],
-      "conflictPoints": ["주주 간의 의견이 갈리는 지점 1", "2"],
-      "visualData": {
-        "type": "radar",
-        "labels": ["혁신성", "타당성", "실용성", "대중성"],
-        "datasets": [
-           { "label": "논문A", "data": [80, 70, 90, 60] },
-           { "label": "논문B", "data": [60, 90, 70, 80] }
-        ]
-      }
+      const result = await model.generateContent(promptParts);
+      return { summary: (await result.response).text() };
+    } catch (error: any) {
+      lastError = error;
     }
-
-    자료들:
-    ${combinedText}
-  `;
-
-  const result = await model.generateContent(prompt);
-  return JSON.parse(result.response.text());
+  }
+  throw new Error(`다중 분석 실패. (에러: ${lastError?.message})`);
 }

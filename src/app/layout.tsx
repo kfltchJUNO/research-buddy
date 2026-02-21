@@ -1,13 +1,34 @@
-import "./globals.css"; // 디자인을 입혀주는 핵심 마법의 주문입니다!
-import { Toaster } from "react-hot-toast";
+// src/app/layout.tsx
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import Header from "@/components/layout/Header"; // ✅ 헤더 컴포넌트 불러오기
+import { Toaster } from "react-hot-toast"; // 알림창
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "ResearchBuddy | Research Faster. Think Deeper.",
+  description: "AI 기반 논문 분석 파트너",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="ko">
-      {/* 폰트를 깔끔하게 보이게 하는 설정을 추가하면 더 예뻐집니다. */}
-      <body className="antialiased"> 
-        {children}
-        <Toaster />
+      <body className={`${inter.className} bg-[#F9FAFB] text-gray-900 antialiased min-h-screen`}>
+        {/* ✅ 화면 최상단에 헤더 고정 */}
+        <Header />
+        
+        {/* 헤더 높이만큼 여백을 주고 메인 콘텐츠 표시 */}
+        <main className="pt-20">
+          {children}
+        </main>
+
+        <Toaster position="bottom-center" />
       </body>
     </html>
   );

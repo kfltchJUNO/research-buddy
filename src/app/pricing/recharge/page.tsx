@@ -3,118 +3,88 @@
 import { useState } from "react";
 import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { useRouter } from "next/navigation";
-import { CheckCircle2, CreditCard, Info } from "lucide-react";
+import Header from "@/components/layout/Header";
 import toast from "react-hot-toast";
 
+const PLANS = [
+  { id: 'p1', ink: 100, price: 6900, label: "실속형" },
+  { id: 'p2', ink: 250, price: 14900, label: "실용형 (인기)" },
+  { id: 'p3', ink: 600, price: 29000, label: "전문가형 (추천)" },
+];
+
 export default function RechargePage() {
-  const router = useRouter();
-  const [depositor, setDepositor] = useState("");
-  const [amount, setAmount] = useState(50); // 기본 50 Ink
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const price = amount * 100; // 1 Ink = 100원 기준
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestRecharge = async (plan: any) => {
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) return toast.error("로그인이 필요합니다.");
 
-    if (!depositor) {
-      toast.error("입금자명을 입력해주세요.");
-      return;
-    }
-
-    setIsSubmitting(true);
+    setLoading(true);
     try {
       await addDoc(collection(db, "ink_requests"), {
         userId: user.uid,
-        depositorName: depositor,
-        amount: amount,
-        price: price,
+        userEmail: user.email,
+        inkAmount: plan.ink,
+        price: plan.price,
         status: "pending",
         requestedAt: serverTimestamp(),
       });
-
-      toast.success("충전 요청이 완료되었습니다. 확인 후 즉시 지급됩니다!", {
-        duration: 5000,
-        icon: '🖋️'
-      });
-      router.push("/");
-    } catch (err) {
+      toast.success("충전 요청 완료! 입금 확인 후 지급됩니다.");
+    } catch (e) {
       toast.error("요청 중 오류가 발생했습니다.");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <main className="pt-32 pb-20 px-6 max-w-xl mx-auto">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-black mb-2">잉크 충전 요청</h2>
-        <p className="text-gray-500">입금 확인 후 10분 내로 잉크가 지급됩니다.</p>
-      </div>
-
-      {/* 무통장 입금 안내 카드 */}
-      <div className="bg-black text-white p-8 rounded-[2.5rem] mb-8 shadow-xl">
-        <div className="flex items-center gap-2 mb-6 opacity-60 text-sm font-bold">
-          <CreditCard size={16} /> 입금 계좌 안내
-        </div>
-        <div className="space-y-2">
-          <p className="text-2xl font-black text-blue-400">카카오뱅크 3333-01-1234567</p>
-          <p className="text-lg font-bold">예금주: 리서치버디 (준호)</p>
-        </div>
-        <div className="mt-6 p-4 bg-white/10 rounded-2xl flex gap-3">
-          <Info size={20} className="shrink-0 text-blue-300" />
-          <p className="text-xs leading-relaxed opacity-80">
-            반드시 입력하신 입금자명과 동일한 이름으로 송금해주세요. 확인이 지연될 수 있습니다.
-          </p>
-        </div>
-      </div>
-
-      {/* 정보 입력 폼 */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-sm font-black ml-1 text-gray-700">입금자명</label>
-          <input 
-            type="text"
-            placeholder="송금하신 분의 실명을 입력하세요"
-            value={depositor}
-            onChange={(e) => setDepositor(e.target.value)}
-            className="w-full p-4 bg-white border-2 border-gray-100 rounded-2xl focus:border-black transition-all outline-none font-bold"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-black ml-1 text-gray-700">충전 수량 선택</label>
-          <div className="grid grid-cols-3 gap-3">
-            {[50, 100, 300].map((val) => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => setAmount(val)}
-                className={`py-4 rounded-2xl font-black transition-all border-2 ${
-                  amount === val ? 'border-black bg-black text-white' : 'border-gray-100 bg-white text-gray-400'
-                }`}
+    <div className="min-h-screen bg-[#F9FAFB]">
+      <Header />
+      <main className="max-w-5xl mx-auto pt-32 pb-20 px-6">
+        <h2 className="text-4xl font-black text-center mb-12 tracking-tighter">Ink 충전소 🖋️</h2>
+        
+        <div className="grid md:grid-cols-3 gap-8 mb-16">
+          {PLANS.map(plan => (
+            <div key={plan.id} className="bg-white p-10 rounded-[3rem] border-2 border-gray-100 hover:border-violet-600 transition-all text-center group shadow-sm">
+              <span className="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em]">{plan.label}</span>
+              <div className="text-5xl font-black my-8 group-hover:scale-110 transition-transform">{plan.ink} <span className="text-lg text-gray-300">Ink</span></div>
+              <div className="text-gray-900 font-black text-2xl mb-10">₩{plan.price.toLocaleString()}</div>
+              <button 
+                onClick={() => requestRecharge(plan)}
+                disabled={loading}
+                className="w-full py-5 bg-gray-900 text-white rounded-[1.5rem] font-black hover:bg-violet-600 transition-colors disabled:bg-gray-300 shadow-xl shadow-gray-200"
               >
-                {val} Ink
+                {loading ? "요청 중..." : "충전 요청하기"}
               </button>
-            ))}
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-sm max-w-2xl mx-auto">
+          <h4 className="font-black text-gray-900 text-2xl mb-8 flex items-center gap-3">
+            <span className="w-10 h-10 bg-yellow-400 rounded-2xl flex items-center justify-center text-lg">🏦</span>
+            입금 계좌 정보
+          </h4>
+          <div className="space-y-5 text-gray-700">
+            <div className="flex justify-between items-center py-4 border-b border-gray-50">
+              <span className="font-bold text-gray-400 text-sm">은행</span>
+              <span className="font-black text-lg">카카오뱅크</span>
+            </div>
+            <div className="flex justify-between items-center py-4 border-b border-gray-50">
+              <span className="font-bold text-gray-400 text-sm">계좌번호</span>
+              <span className="font-black text-2xl text-violet-600 tracking-tight">3333-29-9690780</span>
+            </div>
+            <div className="flex justify-between items-center py-4 border-b border-gray-50">
+              <span className="font-bold text-gray-400 text-sm">예금주</span>
+              <span className="font-black text-lg text-gray-900">오준호</span>
+            </div>
+            <p className="pt-8 text-[13px] text-gray-400 font-medium leading-relaxed text-center">
+              * 입금자명과 로그인하신 계정 정보가 동일해야 처리가 빠릅니다.<br/>
+              * 관리자 승인 후 실시간으로 잉크가 반영됩니다.
+            </p>
           </div>
         </div>
-
-        <div className="bg-gray-50 p-6 rounded-[2rem] flex justify-between items-center">
-          <span className="font-bold text-gray-500">최종 입금 금액</span>
-          <span className="text-2xl font-black">{price.toLocaleString()}원</span>
-        </div>
-
-        <button
-          disabled={isSubmitting}
-          className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-lg hover:bg-blue-700 transition-all shadow-lg active:scale-95 disabled:bg-gray-300"
-        >
-          {isSubmitting ? "처리 중..." : "입금 확인 요청하기"}
-        </button>
-      </form>
-    </main>
+      </main>
+    </div>
   );
 }

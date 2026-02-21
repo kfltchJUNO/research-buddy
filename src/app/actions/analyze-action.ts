@@ -1,149 +1,80 @@
+// src/app/actions/analyze-action.ts
 "use server";
 
+import { analyzePDFDirect, analyzeMultiDirect } from "@/services/gemini-service";
 import { db } from "@/lib/firebase";
-import { 
-  doc, 
-  runTransaction, 
-  collection, 
-  serverTimestamp, 
-  getDocs, 
-  query, 
-  where, 
-  documentId 
-} from "firebase/firestore";
-import { analyzeWithGeminiPro, analyzeMulti } from "@/services/gemini-service";
+import { doc, getDoc, collection, serverTimestamp, runTransaction, increment } from "firebase/firestore";
 
-const INK_COSTS = { 
-  scan: 5, 
-  understand: 10, 
-  think: 15, 
-  multi: 40 
-};
-
-/**
- * [단일 분석] UploadZone에서 호출하는 고속 스캔 함수
- */
-export async function startQuickScan(formData: FormData) {
+export async function runUnifiedAnalysisAction(formData: FormData) {
   try {
-    const file = formData.get("file") as File;
     const userId = formData.get("userId") as string;
-    
-    if (!file || !userId) throw new Error("필수 정보가 누락되었습니다.");
+    const mode = (formData.get("mode") as any) || 'scan';
+    const rawFiles = formData.getAll("files") as File[];
 
-    const content = "분석 대상 논문의 텍스트 데이터 예시입니다. 실제 구현 시 PDF 본문 텍스트가 여기에 위치합니다."; 
+    if (!userId || rawFiles.length === 0) throw new Error("분석할 파일이 없습니다.");
 
-    const result = await runTransaction(db, async (transaction) => {
-      const userRef = doc(db, "users", userId);
-      const userSnap = await transaction.get(userRef);
-      if (!userSnap.exists()) throw new Error("유저 정보가 없습니다.");
+    // 🚀 1. 유저 상태 사전 검사 (API 호출 전에 미리 체크)
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) throw new Error("유저 정보를 찾을 수 없습니다.");
 
-      const currentInk = userSnap.data().inkBalance || 0;
-      if (currentInk < INK_COSTS.scan) throw new Error("잉크가 부족합니다.");
+    const userData = userSnap.data();
+    const isMulti = rawFiles.length > 1;
+    const cost = isMulti ? 30 : (mode === 'think' ? 15 : 10);
+    const currentInk = userData.inkBalance || 0;
 
-      // Gemini AI 분석 실행 (타입 에러 방지를 위해 'scan' 단언)
-      const analysisData = await analyzeWithGeminiPro(content, 'scan' as any);
+    const isFirstFree = !isMulti && (userData.hasFreeTrial === true || !userData.analysisCount || userData.analysisCount === 0);
+
+    // 잉크가 없으면 아예 여기서 차단 (UI에 정확히 전달됨)
+    if (!isFirstFree && currentInk < cost) {
+      throw new Error(`잉크가 부족합니다. (필요: ${cost} / 현재: ${currentInk})`);
+    }
+
+    // 🚀 2. 파일 변환 부분 수정
+    const filePromises = rawFiles.map(async (file) => {
+      const arrayBuffer = await file.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
+      
+      // ✅ 한글 파일명 깨짐 복구 마법! (Latin1 -> UTF-8)
+      const decodedTitle = Buffer.from(file.name, 'latin1').toString('utf8');
+      
+      return { base64, title: decodedTitle, mimeType: file.type };
+    });
+    const processedFiles = await Promise.all(filePromises);
+
+    // 🚀 3. AI 분석 실행 (DB 락을 걸지 않고 자유롭게 연산하도록 밖으로 뺌)
+    const analysisResult = isMulti 
+      ? await analyzeMultiDirect(processedFiles)
+      : await analyzePDFDirect(processedFiles[0].base64, mode);
+
+    // 🚀 4. 분석 결과 저장 및 잉크 차감 (가장 빠르고 안전한 트랜잭션)
+    const docId = await runTransaction(db, async (transaction) => {
+      const freshUserSnap = await transaction.get(userRef);
+      const freshUserData = freshUserSnap.data()!;
+      const freshIsFirstFree = !isMulti && (freshUserData.hasFreeTrial === true || !freshUserData.analysisCount || freshUserData.analysisCount === 0);
+
+      // 무료권 차감 OR 잉크 차감
+      if (freshIsFirstFree) {
+        transaction.update(userRef, { hasFreeTrial: false, analysisCount: increment(1) });
+      } else {
+        transaction.update(userRef, { inkBalance: increment(-cost), analysisCount: increment(1) });
+      }
 
       const newDocRef = doc(collection(db, "knowledge_library"));
-      transaction.update(userRef, { inkBalance: currentInk - INK_COSTS.scan });
       transaction.set(newDocRef, {
         userId,
-        title: file.name,
-        plainTextContent: content,
-        mode: "scan",
-        ...analysisData,
-        createdAt: serverTimestamp(),
-      });
-
-      return { 
-        docId: newDocRef.id,
-        keywords: analysisData.keywords || [],
-        oneLineSummary: analysisData.oneLineSummary || ""
-      };
-    });
-
-    return { success: true, data: result, message: "분석이 성공적으로 완료되었습니다." };
-  } catch (error: any) {
-    return { success: false, message: error.message || error.toString() };
-  }
-}
-
-/**
- * [재분석] PerspectiveShiftUI 등에서 요청하는 분석 모드 전환
- */
-export async function reAnalyzeAction(docId: string, userId: string, mode: string) {
-  try {
-    const cost = (INK_COSTS as any)[mode] || 10;
-
-    const result = await runTransaction(db, async (transaction) => {
-      const userRef = doc(db, "users", userId);
-      const docRef = doc(db, "knowledge_library", docId);
-      
-      const [userSnap, docSnap] = await Promise.all([
-        transaction.get(userRef),
-        transaction.get(docRef)
-      ]);
-
-      if (!userSnap.exists() || !docSnap.exists()) throw new Error("정보를 찾을 수 없습니다.");
-
-      const currentInk = userSnap.data().inkBalance || 0;
-      if (currentInk < cost) throw new Error("잉크가 부족합니다.");
-
-      const content = docSnap.data().plainTextContent;
-      const analysisData = await analyzeWithGeminiPro(content, mode as any);
-
-      transaction.update(userRef, { inkBalance: currentInk - cost });
-      transaction.update(docRef, {
+        title: isMulti ? `${processedFiles[0].title} 외 ${processedFiles.length - 1}건` : processedFiles[0].title,
+        analysisResult: analysisResult.summary,
         mode,
-        ...analysisData,
-        updatedAt: serverTimestamp(),
-      });
-
-      return { success: true, message: "분석이 업데이트되었습니다." };
-    });
-
-    return result;
-  } catch (error: any) {
-    return { success: false, message: error.message || error.toString() };
-  }
-}
-
-/**
- * [비교 분석] 여러 논문을 취합하여 Gemini로 분석하는 핵심 로직
- */
-export async function runMultiAnalysisAction(userId: string, docIds: string[]) {
-  try {
-    return await runTransaction(db, async (transaction) => {
-      const userRef = doc(db, "users", userId);
-      const userSnap = await transaction.get(userRef);
-      if (!userSnap.exists()) throw new Error("유저 정보가 없습니다.");
-      
-      const currentInk = userSnap.data().inkBalance || 0;
-      if (currentInk < INK_COSTS.multi) throw new Error("잉크가 부족합니다.");
-
-      const libraryRef = collection(db, "knowledge_library");
-      const q = query(libraryRef, where(documentId(), "in", docIds));
-      const docsSnap = await getDocs(q);
-      
-      const contents = docsSnap.docs.map(d => ({
-        title: d.data().title,
-        text: d.data().plainTextContent?.substring(0, 5000) || ""
-      }));
-
-      const analysisData = await analyzeMulti(contents);
-      const newReportRef = doc(collection(db, "knowledge_library"));
-
-      transaction.update(userRef, { inkBalance: currentInk - INK_COSTS.multi });
-      transaction.set(newReportRef, {
-        userId,
-        title: `${contents.length}개 논문 비교 분석 리포트`,
-        mode: "multi",
-        ...analysisData,
         createdAt: serverTimestamp(),
       });
 
-      return { success: true, docId: newReportRef.id, message: "비교 분석이 완료되었습니다." };
+      return newDocRef.id;
     });
-  } catch (error: any) {
-    return { success: false, message: error.toString() };
+
+    return { success: true, data: { docId } };
+  } catch (err: any) {
+    console.error("🔥 Analysis Action Error:", err.message);
+    return { success: false, message: err.message };
   }
 }

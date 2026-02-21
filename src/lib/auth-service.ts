@@ -1,44 +1,46 @@
-import { GoogleAuthProvider, signInWithPopup, User } from "firebase/auth";
 import { auth, db } from "./firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
-// 랜덤 닉네임 생성기 (예: 연구자A12)
-const generateRandomNickname = () => {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
-  const randomNumber = Math.floor(Math.random() * 90) + 10; // 10-99
-  return `연구자${randomLetter}${randomNumber}`;
+const generateResearcherNickname = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const randChars = chars[Math.floor(Math.random()*26)] + chars[Math.floor(Math.random()*26)];
+  const randNums = Math.floor(Math.random()*900) + 100;
+  return `연구자${randChars}${randNums}`;
 };
 
 export const signInWithGoogle = async () => {
   const provider = new GoogleAuthProvider();
+  const ADMIN_EMAIL = "ot.helper7@gmail.com";
+
   try {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
-
-    // Firestore에 유저 정보가 있는지 확인
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
 
+    const isTargetAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
     if (!userSnap.exists()) {
-      // 신규 유저라면 문서 자동 생성 (준호님의 스키마 반영)
+      // 신규 가입: 잉크 0, 무료체험권 1회 부여
       await setDoc(userRef, {
         uid: user.uid,
         email: user.email,
-        nickname: generateRandomNickname(),
-        inkBalance: 0, // 초기 잉크
-        isTrialUsed: false,
-        role: "user",
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
+        nickname: generateResearcherNickname(),
+        role: isTargetAdmin ? "admin" : "user",
+        inkBalance: 0, 
+        hasFreeTrial: true, // 최초 1회 무료 분석용 플래그
+        analysisCount: 0,
+        createdAt: new Date(),
       });
     } else {
-      // 기존 유저라면 마지막 로그인 시간만 업데이트
-      await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+      // 기존 유저가 관리자 이메일인 경우 권한 강제 업데이트
+      if (isTargetAdmin && userSnap.data().role !== "admin") {
+        await updateDoc(userRef, { role: "admin" });
+      }
     }
-    return user;
+    window.location.href = "/library";
   } catch (error) {
     console.error("Login Error:", error);
-    throw error;
   }
 };
