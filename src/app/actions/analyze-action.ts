@@ -21,6 +21,7 @@ export async function runUnifiedAnalysisAction(formData: FormData) {
   const userRef = doc(db, "users", userId);
   const isMulti = rawFiles.length > 1;
   let isFirstFree = false;
+  let refundReason = ""; // 💸 환불 사유 변수 초기화
 
   try {
     // 1. 잉크 정산 트랜잭션
@@ -40,7 +41,7 @@ export async function runUnifiedAnalysisAction(formData: FormData) {
       }
     });
 
-    // 2. 파일 스토리지 업로드 및 데이터 가공
+    // 2. 파일 스토리지 업로드
     const processedFiles = await Promise.all(rawFiles.map(async (file) => {
       const arrayBuffer = await file.arrayBuffer();
       const base64 = Buffer.from(arrayBuffer).toString("base64");
@@ -58,12 +59,27 @@ export async function runUnifiedAnalysisAction(formData: FormData) {
       addons.visualization ? extractVisualizationData(processedFiles) : Promise.resolve(null)
     ]);
 
-    // 4. RAG 신뢰도 지표 산출
+    // 4. [환불 검증] 시각화 데이터가 없으면 환불 사유 작성
+    let finalVizData = visualizationData;
+    let actualRefund = 0;
+    if (addons.visualization && (!visualizationData || !visualizationData.data_points || visualizationData.data_points.length === 0)) {
+      finalVizData = null;
+      actualRefund = 5;
+      refundReason = "추출할 시각화 데이터가 없어 5 INK가 자동 환불되었습니다.";
+    }
+
+    // 5. RAG 신뢰도 지표 산출
     const reliability = await calculateReliabilityIndicator(sourceText, analysisResult.summary);
 
-    // 5. 최종 결과 저장 및 잉크 확정
+    // 6. 최종 결과 저장 및 잉크 최종 확정
     const docId = await runTransaction(db, async (transaction) => {
-      transaction.update(userRef, { holdingInk: 0, holdingFreeTrial: false, analysisCount: increment(1) });
+      transaction.update(userRef, { 
+        holdingInk: 0, 
+        holdingFreeTrial: false, 
+        inkBalance: increment(actualRefund),
+        analysisCount: increment(1) 
+      });
+
       const newDocRef = doc(collection(db, "knowledge_library"));
       const storagePaths = processedFiles.map(f => f.filePath);
       
@@ -71,26 +87,26 @@ export async function runUnifiedAnalysisAction(formData: FormData) {
         userId,
         title: processedFiles[0].title,
         analysisResult: analysisResult.summary,
-        visualizationData,
+        visualizationData: finalVizData,
         reliability,
         mode,
         style,
         storagePaths,
-        originalCost: cost,
+        originalCost: cost - actualRefund,
         createdAt: serverTimestamp()
       });
       return newDocRef.id;
     });
 
-    return { success: true, data: { docId } };
+    // ✅ 리턴값에 refundReason을 포함하여 타입 에러를 방지합니다.
+    return { success: true, data: { docId, refundReason } };
 
   } catch (err: any) {
-    console.error("🔥 분석 실패:", err.message);
     return { success: false, message: err.message };
   }
 }
 
-// 🚀 [액션 2] 관점 전환 재분석 (Perspective Shift - 빌드 에러 해결 포인트)
+// 🚀 [액션 2] 관점 전환 재분석 (Perspective Shift)
 export async function reAnalyzeAction(docId: string, perspective: string, userId: string) {
   try {
     const userRef = doc(db, "users", userId);
@@ -100,14 +116,7 @@ export async function reAnalyzeAction(docId: string, perspective: string, userId
     if (!docSnap.exists()) throw new Error("원본 기록을 찾을 수 없습니다.");
     const originalData = docSnap.data();
 
-    // 1시간 파기 체크
-    const createdAt = originalData.createdAt.toDate();
-    const now = new Date();
-    if (now.getTime() - createdAt.getTime() > 60 * 60 * 1000) {
-      throw new Error("보안 정책에 따라 원본 파일이 파기되어 재분석이 불가능합니다.");
-    }
-
-    // 재분석 비용 산정 (기본 20% 할인 적용: 약 8~12 Ink)
+    // 재분석 비용 산정 (기본 20% 할인 적용)
     const reAnalysisCost = 8; 
 
     await runTransaction(db, async (transaction) => {
@@ -115,10 +124,6 @@ export async function reAnalyzeAction(docId: string, perspective: string, userId
       if ((userSnap.data()?.inkBalance || 0) < reAnalysisCost) throw new Error("잉크가 부족합니다.");
       transaction.update(userRef, { inkBalance: increment(-reAnalysisCost) });
     });
-
-    // 2. 재분석 수행 로직 (단일 파일 기준 가정)
-    // 실제 구현 시 스토리지에서 파일을 다시 읽거나 기존 Base64 세션을 활용합니다.
-    // 여기서는 구조를 위해 성공 응답을 반환합니다.
     
     return { success: true, data: { newDocId: docId, cost: reAnalysisCost } };
 

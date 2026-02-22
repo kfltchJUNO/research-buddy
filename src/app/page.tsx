@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-// 🚀 인상된 요금제 및 수익 모델 데이터
+// 🚀 인상된 요금제 및 수익 모델 데이터 (Understand: 15, Deep Think: 25)
 const DEPTH_LEVELS = [
   { id: 'scan', label: 'Quick Scan', icon: <Zap size={24} />, desc: '전체 흐름을 빠르게 파악합니다.', output: '핵심 요약 및 주요 키워드 추출', ink: 5, multiInk: 3 },
   { id: 'understand', label: 'Understand', icon: <BrainCircuit size={24} />, desc: '논문을 완벽하게 내 것으로 만듭니다.', output: '연구 구조 상세 분석 및 시각 자료 해석', ink: 15, multiInk: 8 },
@@ -64,7 +64,7 @@ export default function HomePage() {
 
   // 🚀 [핵심] 인증 및 실시간 데이터 통합 구독 로직
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
         setAuthLoading(false);
         router.replace("/login");
@@ -95,7 +95,7 @@ export default function HomePage() {
         return () => { unsubUser(); unsubDocs(); };
       }
     });
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, [router]);
 
   // 로딩 메시지 애니메이션
@@ -171,13 +171,13 @@ export default function HomePage() {
     const isMulti = files.length > 1;
     const baseCost = isMulti ? 10 + (files.length * selectedMode.multiInk) : selectedMode.ink;
     
-    // 할증 로직
+    // 할증 로직 (수익 모델 보정 적용)
     const pageSurcharge = pdfMeta.pages > 100 ? 5 : 0;
     const textSurcharge = pdfMeta.chars > 50000 ? Math.ceil((pdfMeta.chars - 50000) / 20000) * 2 : 0;
     const addonCost = (addons.visualization ? 5 : 0) + (addons.deepKeyword ? 5 : 0);
     
     const totalCost = baseCost + pageSurcharge + textSurcharge + addonCost;
-    const isFree = !isMulti && (userData?.hasFreeTrial || !userData?.analysisCount);
+    const isFree = !isMulti && (userData?.hasFreeTrial === true || !userData?.analysisCount || userData?.analysisCount === 0);
 
     if (!isFree && (userData?.inkBalance || 0) < totalCost) {
       return toast.error(`잉크가 부족합니다. (필요: ${totalCost} / 현재: ${userData?.inkBalance || 0})`);
@@ -205,10 +205,14 @@ export default function HomePage() {
 
       const res = await runUnifiedAnalysisAction(formData);
 
+      // 🚀 [TypeScript 해결] res.data 안전하게 캐스팅하여 refundReason 접근
       if (res.success && res.data) {
+        const finalData = res.data as { docId: string; refundReason?: string };
         setStatus('success');
-        if (res.data.refundReason) toast.success(res.data.refundReason, { duration: 6000, icon: '💸' });
-        setTimeout(() => router.push(`/analysis/${res.data.docId}`), 1500); 
+        if (finalData.refundReason) {
+          toast.success(finalData.refundReason, { duration: 6000, icon: '💸' });
+        }
+        setTimeout(() => router.push(`/analysis/${finalData.docId}`), 1500); 
       } else {
         setStatus('error');
         setErrorMsg(res.message || "분석 서버 응답 실패");
@@ -219,9 +223,9 @@ export default function HomePage() {
     }
   };
 
-  // 인증 로딩 가드
+  // 인증 로딩 가드 (게스트 오인 방지)
   if (authLoading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
       <Loader2 className="animate-spin text-violet-600 mb-4" size={40} />
       <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Verifying Identity...</p>
     </div>
@@ -234,8 +238,8 @@ export default function HomePage() {
           
           {/* 히어로 타이틀 */}
           <div className="text-center mb-16">
-            <h1 className="text-6xl font-black italic tracking-tighter text-gray-900 mb-4 uppercase leading-none">이 논문, 어디까지<br/>이해하고 싶으세요?</h1>
-            <p className="text-gray-400 font-bold text-sm tracking-widest uppercase italic">"우리는 답이 아니라, 생각을 만듭니다."</p>
+            <h1 className="text-6xl font-black italic tracking-tighter text-gray-900 mb-4 uppercase leading-none">Everything starts<br/>with a Question.</h1>
+            <p className="text-gray-400 font-bold text-sm tracking-widest uppercase italic">ResearchBuddy: Build your Knowledge Stack</p>
           </div>
 
           {/* 📤 파일 드롭존 */}
@@ -266,7 +270,7 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* 💡 Pre-Scan 카드 */}
+          {/* 💡 Pre-Scan 인사이트 카드 */}
           {isPreScanning && <div className="max-w-4xl mx-auto mb-12 p-8 bg-violet-50 rounded-3xl animate-pulse text-center font-black text-violet-600">AI가 논문의 골격을 선행 스캔 중입니다...</div>}
           {preScanData && (
             <div className="max-w-4xl mx-auto mb-16 p-10 bg-gradient-to-br from-violet-600 to-indigo-900 text-white rounded-[3.5rem] shadow-2xl animate-in slide-in-from-bottom-6 relative overflow-hidden">
@@ -287,7 +291,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* ⚙️ 설정 섹션 */}
+          {/* ⚙️ 상세 분석 설정 섹션 */}
           <div className="max-w-4xl mx-auto space-y-20">
             
             {/* 1. 분석 깊이 */}
@@ -359,7 +363,7 @@ export default function HomePage() {
               )}
             </section>
 
-            {/* 메인 분석 버튼 */}
+            {/* 분석 버튼 */}
             <button 
               onClick={handleOpenModal} 
               className="w-full py-9 bg-black text-white rounded-[3rem] font-black text-2xl shadow-2xl shadow-gray-400 hover:bg-violet-600 hover:-translate-y-2 transition-all flex items-center justify-center gap-5 uppercase tracking-tighter"
@@ -368,7 +372,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* 📜 최근 연구 노트 섹션 */}
+          {/* 📜 최근 연구 노트 (Recent Stacks) */}
           <div className="max-w-4xl mx-auto mt-32">
             <div className="flex items-center justify-between mb-10 px-6">
               <h3 className="font-black text-3xl text-gray-900 flex items-center gap-4 italic tracking-tighter"><Clock className="text-violet-600" /> Recent Stacks</h3>
@@ -404,16 +408,19 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 🧾 분석 청구서 모달 */}
+      {/* 🧾 분석 청구서 모달 (Confirm Modal) */}
       {confirmModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md px-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[4rem] p-12 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300">
             <h3 className="text-3xl font-black text-gray-900 mb-10 flex items-center gap-4 italic underline decoration-violet-500 underline-offset-8 decoration-4">ANALYSIS BILL</h3>
             <div className="bg-gray-50 rounded-[2.5rem] p-10 mb-12 space-y-5 font-bold text-sm">
               <div className="flex justify-between items-center"><span className="text-gray-400 uppercase tracking-widest">Base Computation</span><span className="text-gray-900">🖋️ {confirmModal.baseCost}</span></div>
-              {confirmModal.pageSurcharge > 0 && <div className="flex justify-between items-center text-red-500 text-xs font-black uppercase"><span>Large Volume (100P+)</span><span>+ {confirmModal.pageSurcharge}</span></div>}
-              {confirmModal.textSurcharge > 0 && <div className="flex justify-between items-center text-red-500 text-xs font-black uppercase"><span>Token Surcharge</span><span>+ {confirmModal.textSurcharge}</span></div>}
-              {confirmModal.addonCost > 0 && <div className="flex justify-between items-center text-blue-500 text-xs font-black uppercase"><span>Add-ons</span><span>+ {confirmModal.addonCost}</span></div>}
+              {confirmModal.totalCost > confirmModal.baseCost && (
+                <div className="flex justify-between items-center text-red-500 text-xs font-black uppercase">
+                  <span>Add-ons & Surcharges</span>
+                  <span>+ {confirmModal.totalCost - confirmModal.baseCost}</span>
+                </div>
+              )}
               <hr className="border-gray-200 my-6" />
               <div className="flex justify-between items-center">
                 <span className="text-gray-900 font-black text-xl italic">FINAL INK</span>
@@ -432,7 +439,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 🌀 분석 중 로딩 애니메이션 */}
+      {/* 🌀 분석 중 로딩 */}
       {status === 'analyzing' && (
         <div className="flex flex-col items-center justify-center min-h-[70vh] animate-in zoom-in-95 duration-700">
           <div className="relative mb-16">
@@ -454,6 +461,18 @@ export default function HomePage() {
           </div>
           <h2 className="text-4xl font-black text-gray-900 mb-4 italic uppercase">Success!</h2>
           <p className="text-gray-500 font-bold text-lg uppercase tracking-widest">Stacking your new knowledge...</p>
+        </div>
+      )}
+
+      {/* 🚨 에러 화면 */}
+      {status === 'error' && (
+        <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
+          <div className="w-40 h-40 bg-red-50 rounded-full flex items-center justify-center mb-12">
+            <AlertTriangle size={64} className="text-red-500" />
+          </div>
+          <h2 className="text-3xl font-black text-gray-900 mb-4 uppercase tracking-tighter">Analysis Failed</h2>
+          <p className="text-gray-600 font-bold mb-12 max-w-md mx-auto leading-relaxed bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">{errorMsg}</p>
+          <button onClick={() => setStatus('idle')} className="px-10 py-5 bg-black text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-violet-600 transition-all">Back to Home</button>
         </div>
       )}
     </main>
