@@ -6,7 +6,9 @@ import { Clock, Star, ArrowRight, Zap, Target, ShieldCheck } from "lucide-react"
 import CountdownTimer from "./CountdownTimer";
 
 interface LibraryCardProps {
-  item: any; // page.tsx에서 전달한 데이터
+  item: any;
+  // ✅ 아래 한 줄을 추가하여 TypeScript에게 알려줍니다.
+  onFavoriteToggle?: () => void | Promise<void>; // page.tsx에서 전달한 데이터
 }
 
 export default function LibraryCard({ item }: LibraryCardProps) {
