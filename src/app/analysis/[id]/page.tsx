@@ -37,8 +37,11 @@ export default function AnalysisResultPage() {
     const fetchResult = async () => {
       try {
         const docSnap = await getDoc(doc(db, "knowledge_library", docId));
-        if (docSnap.exists()) setData(docSnap.data());
-        else router.push("/");
+        if (docSnap.exists()) {
+          setData(docSnap.data());
+        } else {
+          router.push("/");
+        }
       } catch (error) {
         toast.error("데이터 로드 오류");
       } finally {
@@ -133,7 +136,21 @@ export default function AnalysisResultPage() {
   if (loading) return <div className="min-h-screen pt-32 flex justify-center"><Loader2 className="animate-spin text-violet-600" size={40} /></div>;
   if (!data) return null;
 
-  const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+  // 🚀 [에러 완벽 방어막] 날짜 파싱을 절대 고장 나지 않게 처리합니다.
+  let createdAt = new Date();
+  if (data.createdAt) {
+    if (typeof data.createdAt.toDate === 'function') {
+      createdAt = data.createdAt.toDate();
+    } else if (data.createdAt.seconds) {
+      createdAt = new Date(data.createdAt.seconds * 1000);
+    } else {
+      createdAt = new Date(data.createdAt);
+    }
+  }
+  if (!createdAt || isNaN(createdAt.getTime())) {
+    createdAt = new Date();
+  }
+
   const deletionTime = new Date(createdAt.getTime() + 60 * 60 * 1000);
   const isDeleted = currentTime >= deletionTime; 
   const formattedDeletionTime = deletionTime.toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -189,7 +206,6 @@ export default function AnalysisResultPage() {
 
   return (
     <main className="pt-28 pb-32 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
-      
       <div className="flex items-center justify-between mb-8">
         <button onClick={() => router.push("/")} className="flex items-center gap-2 text-gray-500 hover:text-black font-bold text-sm">
           <ArrowLeft size={16} /> 새로운 분석하기
@@ -247,45 +263,27 @@ export default function AnalysisResultPage() {
       </div>
 
       <div ref={fullContentRef}>
-        
         {chartData && rechartsData.length > 0 && (
           <div className="bg-white p-10 rounded-t-[2rem] border-t border-l border-r border-b-0 border-gray-100 shadow-xl shadow-gray-50/50 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-indigo-500"></div>
-            
             <div className="mb-8">
-              <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase mb-3 tracking-widest">
-                AI Data Visualization Add-on
-              </span>
-              <h3 className="font-black text-2xl text-gray-900 flex items-center gap-2">
-                <BarChart3 className="text-violet-600" /> {chartData.paper_title || "데이터 시각화 결과"}
-              </h3>
+              <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase mb-3 tracking-widest">AI Data Visualization Add-on</span>
+              <h3 className="font-black text-2xl text-gray-900 flex items-center gap-2"><BarChart3 className="text-violet-600" /> {chartData.paper_title || "데이터 시각화 결과"}</h3>
               <p className="text-sm font-bold text-gray-500 mt-2">AI가 논문에서 추출한 핵심 수치를 시각화했습니다.</p>
             </div>
-
             <div className="h-[350px] w-full bg-gray-50 p-6 rounded-2xl border border-gray-100">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={rechartsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 'bold' }} 
-                    tickFormatter={(val) => val.length > 10 ? val.substring(0, 10) + '...' : val}
-                    axisLine={false} tickLine={false} dy={10}
-                  />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 'bold' }} tickFormatter={(val) => val.length > 10 ? val.substring(0, 10) + '...' : val} axisLine={false} tickLine={false} dy={10} />
                   <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                  <Tooltip 
-                    cursor={{ fill: '#f3f4f6' }}
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
-                    formatter={(value, name, props) => [`${value}${props.payload.unit}`, props.payload.description]}
-                    labelStyle={{ color: '#8b5cf6', marginBottom: '4px' }}
-                  />
+                  <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }} formatter={(value, name, props) => [`${value}${props.payload.unit}`, props.payload.description]} labelStyle={{ color: '#8b5cf6', marginBottom: '4px' }} />
                   <Bar dataKey="value" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
         )}
-
         <div className={`bg-white p-10 border border-gray-100 shadow-xl shadow-gray-50/50 ${chartData ? 'rounded-b-[2rem]' : 'rounded-t-[2rem]'}`}>
           <div className="text-gray-800 text-[15px] leading-[1.8] tracking-wide font-medium" style={{ whiteSpace: 'pre-wrap', wordBreak: 'keep-all' }}>
             {renderTextWithSeparators(mainResultText)}
@@ -294,7 +292,6 @@ export default function AnalysisResultPage() {
       </div>
 
       <div className="bg-gray-50 p-8 rounded-b-[2rem] border-b border-l border-r border-gray-200 shadow-xl shadow-gray-50/50 mb-10 mt-[-1px]">
-        
         <div className="flex flex-wrap gap-4 mb-8">
           <button onClick={() => toggleAccordion('reliability')} className="flex items-center gap-2 text-sm font-black text-gray-600 hover:text-violet-600 transition-colors bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
             <ShieldAlert size={16} /> 신뢰도 보기 {openAccordion === 'reliability' ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
@@ -315,57 +312,35 @@ export default function AnalysisResultPage() {
               <span>[직접 인용 기반] {data.reliability?.direct || 72}%</span>
               <span>[의미 해석 기반] {data.reliability?.semantic || 28}%</span>
             </div>
-            <p className="text-sm font-medium text-gray-600">
-              이 분석은 원문 텍스트와의 코사인 유사도(Cosine Similarity) 연산을 통해 검증되었습니다. 
-              {data.reliability?.direct > 60 ? " 높은 일치도를 보이므로 학술적 근거로 활용하기 좋습니다." : " AI의 맥락적 재해석이 많이 포함되어 있으므로 원본 대조를 권장합니다."}
-            </p>
+            <p className="text-sm font-medium text-gray-600">이 분석은 원문 텍스트와의 코사인 유사도(Cosine Similarity) 연산을 통해 검증되었습니다. {data.reliability?.direct > 60 ? " 높은 일치도를 보이므로 학술적 근거로 활용하기 좋습니다." : " AI의 맥락적 재해석이 많이 포함되어 있으므로 원본 대조를 권장합니다."}</p>
           </div>
         )}
 
         {openAccordion === 'evidence' && (
           <div className="bg-white p-5 rounded-2xl border border-violet-100 mb-8 animate-in slide-in-from-top-2">
             <h4 className="font-black text-gray-900 mb-4">주요 근거 문장</h4>
-            <div className="text-sm font-medium text-gray-600 italic leading-relaxed whitespace-pre-wrap">
-              {evidenceText}
-            </div>
+            <div className="text-sm font-medium text-gray-600 italic leading-relaxed whitespace-pre-wrap">{evidenceText}</div>
           </div>
         )}
 
         <div className="border-t border-gray-200 pt-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-violet-100 text-violet-600 rounded-full mb-4">
-            <Lightbulb size={24} />
-          </div>
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-violet-100 text-violet-600 rounded-full mb-4"><Lightbulb size={24} /></div>
           <h3 className="text-xl font-black text-gray-900 mb-2">이 논문, 다른 시선으로 보면?</h3>
           <p className="text-sm text-gray-500 font-bold mb-6">파일 파기 전까지 20% 할인된 잉크로 새로운 인사이트를 발견하세요.</p>
-          
           <div className="flex flex-wrap justify-center gap-3">
             {['비판적으로 보기', '반박해보기', '다른 이론으로 보기', '쉽게 설명하기'].map((perspective) => (
               <button 
-                key={perspective} 
-                onClick={() => handleReanalyze(perspective)}
-                className={`group relative flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-md shadow-gray-100 border border-gray-100
-                  ${isDeleted ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-black text-gray-800 hover:text-white'}
-                `}
+                key={perspective} onClick={() => handleReanalyze(perspective)}
+                className={`group relative flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-md shadow-gray-100 border border-gray-100 ${isDeleted ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-black text-gray-800 hover:text-white'}`}
                 disabled={isDeleted}
               >
-                <RefreshCw size={14} className={!isDeleted ? "group-hover:animate-spin" : ""} />
-                {perspective}
-                {!isDeleted && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full border border-white">
-                    -20%
-                  </span>
-                )}
+                <RefreshCw size={14} className={!isDeleted ? "group-hover:animate-spin" : ""} /> {perspective}
+                {!isDeleted && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full border border-white">-20%</span>}
               </button>
             ))}
           </div>
-          
-          {isDeleted && (
-            <p className="text-xs font-bold text-red-500 mt-4 animate-in fade-in">
-              보안을 위해 원본 파일이 영구 삭제되어 재분석을 진행할 수 없습니다.
-            </p>
-          )}
+          {isDeleted && <p className="text-xs font-bold text-red-500 mt-4 animate-in fade-in">보안을 위해 원본 파일이 영구 삭제되어 재분석을 진행할 수 없습니다.</p>}
         </div>
-
       </div>
     </main>
   );
