@@ -9,10 +9,10 @@
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve", // 이 줄이 JSX 에러를 해결하는 핵심입니다.
+    "jsx": "preserve",
     "incremental": true,
     "plugins": [
       {
@@ -20,7 +20,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"] // 경로 별칭 설정
+      "@/*": ["./src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

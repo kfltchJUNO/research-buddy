@@ -239,9 +239,11 @@ export default function HomePage() {
     if (files.length === 0) return toast.error("Select papers first.");
     const isMulti = files.length > 1;
     const baseCost = isMulti ? 10 + (files.length * selectedMode.multiInk) : selectedMode.ink;
-    const totalCost = baseCost + (pdfMeta.pages > 100 ? 5 : 0) + (pdfMeta.chars > 50000 ? 4 : 0) + (addons.visualization ? 5 : 0);
+    // ※ totalCost는 UI 표시용. 실제 차감은 서버(analyze-action.ts)에서 계산함
+    const totalCost = baseCost + (addons.visualization ? 5 : 0) + (addons.deepKeyword ? 5 : 0);
     const inkBalance = userData?.inkBalance || 0;
-    const isFree = !isMulti && (userData?.hasFreeTrial === true || !userData?.analysisCount);
+    // ✅ 버그 2 수정: hasFreeTrial 단독 조건 (analysisCount 조건 제거)
+    const isFree = !isMulti && userData?.hasFreeTrial === true;
     const isShortage = !isFree && inkBalance < totalCost;
     setConfirmModal({ isOpen: true, baseCost, totalCost, isShortage, inkBalance, isFree });
   };
@@ -250,7 +252,6 @@ export default function HomePage() {
   const executeAnalysis = async () => {
     if (!confirmModal || confirmModal.isShortage) return;
     setStatus('analyzing');
-    const { totalCost } = confirmModal;
     setConfirmModal(null);
 
     try {
@@ -259,7 +260,7 @@ export default function HomePage() {
       formData.append("userId", auth.currentUser!.uid);
       formData.append("mode", selectedMode.id);
       formData.append("style", selectedStyle);
-      formData.append("totalCost", totalCost.toString());
+      // ✅ 버그 3 수정: totalCost 클라이언트 전달 제거 — 서버에서 직접 계산
       formData.append("addons", JSON.stringify(addons));
       formData.append("sourceText", sourceText);
 
